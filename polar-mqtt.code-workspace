@@ -1,0 +1,28 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        // Rust settings
+        "rust-analyzer.checkOnSave.enable": true,
+        "rust-analyzer.checkOnSave.command": "clippy",
+        
+        // C/C++ settings
+        "C_Cpp.default.includePath": [
+            "${workspaceFolder}/cpp/api",
+            "${workspaceFolder}/cpp/bridge/include",
+            "${workspaceFolder}/cpp/impl"
+        ],
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+        
+        // CMake settings
+        "cmake.configureSettings": {
+            "CMAKE_MODULE_PATH": "${workspaceFolder}/cmake"
+        },
+        "cmake.buildDirectory": "${workspaceFolder}/build",
+        "cmake.sourceDirectory": "${workspaceFolder}/cpp"
+    }
+}

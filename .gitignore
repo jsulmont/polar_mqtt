@@ -1,0 +1,48 @@
+# Rust
+/target/
+Cargo.lock  # Ignore lock file for library crates
+**/*.rs.bk
+
+# CMake build directories and artifacts
+/build/
+/test_polarmqtt/build/ 
+/test_paho/build/
+/examples/**/build/
+/test_paho/paho_test
+
+# Specific CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.dir/
+Makefile
+
+# Compiler outputs
+*.o
+*.so
+*.dylib
+*.a
+
+# MacOS
+.DS_Store
+
+# IDE temporary files
+*.swp
+*.swo
+*~
+
+# Keep workspace configuration
+!polar-mqtt.code-workspace
+
+# Keep these files
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Keep CMake find modules
+!cmake/*.cmake
+
+# Example binaries
+/examples/**/target/

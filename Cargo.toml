@@ -1,0 +1,20 @@
+[package]
+name = "polar-mqtt"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jan <jan@juxt.pro>"]
+description = "An idiomatic Rust wrapper for MQTT communication"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jsulmont/polar-mqtt"
+
+[dependencies]
+thiserror = "2.0"
+
+[build-dependencies]
+cmake = "0.1"
+bindgen = "0.70"
+
+[dev-dependencies]
+rand = "0.8"
+ctrlc = "3.4.5"
+uuid = { version="1.11.0", features = ["v4"]}
