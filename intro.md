@@ -173,6 +173,10 @@ The `'a` lifetime in MessageView is crucial for safety:
 - The `'a` lifetime ensures these references cannot outlive the callback.
 - After the callback returns, the C++ layer may free or modify the data.
 
+#### MessageView::to_owned()
+When receiving messages through a callback, the data arrives as a MessageView reference, which provides zero-copy access to data held by the underlying C++ API. If you need to retain the message data beyond the callback's scope, you can call `to_owned()` to create a deep copy, which returns an owned Message. 
+See [here](examples/message_view.rs) for an example.
+
 ### 3. Thread-Safe Callback System
 
 ```rust
