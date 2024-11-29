@@ -198,7 +198,7 @@ struct CallbackContext {
 ```rust
 pub struct Client {
     session: *mut bindings::mqtt_session_t,
-    _context: Arc<Mutex<CallbackContext>>, // Keep the context alive.
+    _context: Box<CallbackContext>, 
 }
 
 impl Client {
@@ -213,17 +213,19 @@ impl Client {
         F2: Fn(ConnectionState) + Send + Sync + 'static,
         F3: Fn(i32, &str) + Send + Sync + 'static,
     {
-        let callback_context = Arc::new(Mutex::new(CallbackContext {
+        let context = Box::new(CallbackContext {
             message_callback: Box::new(on_message),
             state_callback: Box::new(on_state_change),
             error_callback: Box::new(on_error),
-        }));
+        });
 
-  	    // implementation 
-  	    
+        let context_ptr = Box::into_raw(context) as *mut std::ffi::c_void;
+
+        // implementation 
+        
         Ok(Self {
             session,
-            _context: callback_context,
+            _context: context, 
         })
     }
 
@@ -232,19 +234,9 @@ impl Client {
        message: *const mqtt_message_data_t,
        context: *mut std::ffi::c_void,
     ) {
-       // Reconstruct the Arc<Mutex<CallbackContext>> from the raw pointer.
-       // Since Arc::from_raw decreases the strong count when dropped,
-       // we use ManuallyDrop to prevent it from being prematurely deallocated.
-       let context = ManuallyDrop::new(
-          Arc::from_raw(context as *const Mutex<CallbackContext>)
-       );
-
-       if let Ok(guard) = context.lock() {
-           let msg = MessageView::from_raw(message);
-           // Call the user-provided callback with the message view.
-           (guard.message_callback)(&msg);
-       }
-      // No need to drop `context` here; ManuallyDrop ensures it remains alive.
+       let context = &*(context as *const CallbackContext);
+       let msg = MessageView::from_raw(message);
+       (context.message_callback)(&msg);
     }
 }
 ```
@@ -297,25 +289,22 @@ virtual void onError(int errorCode, const char *message) = 0;
    - Routes errors through callback context.
 
 ```rust
-unsafe extern "C" fn error_callback(
-    error_code: std::os::raw::c_int,
-    message: *const std::os::raw::c_char,
-    context: *mut std::ffi::c_void,
-) {
-    if !message.is_null() && !context.is_null() {
-        let context = ManuallyDrop::new(Arc::from_raw(
-            context as *const Mutex<CallbackContext>
-        ));
-        
+    unsafe extern "C" fn error_callback(
+        error_code: std::os::raw::c_int,
+        message: *const std::os::raw::c_char,
+        context: *mut std::ffi::c_void,
+    ) {
+        if message.is_null() || context.is_null() {
+            return;
+        }
+
+        let context = &*(context as *const CallbackContext);
         let error_msg = CStr::from_ptr(message)
             .to_str()
             .unwrap_or("Invalid error message");
 
-        if let Ok(guard) = context.lock() {
-            (guard.error_callback)(error_code, error_msg);
-        }
+        (context.error_callback)(error_code, error_msg);
     }
-}
 ```
 - **Rust API**:
   - Exposes errors through the Result type.
