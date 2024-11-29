@@ -180,45 +180,76 @@ See [here](examples/message_view.rs) for an example.
 ### 3. Thread-Safe Callback System
 
 ```rust
+
+pub type MessageCallback = dyn Fn(&MessageView) + Send + Sync;
+pub type StateCallback = dyn Fn(ConnectionState) + Send + Sync;
+pub type ErrorCallback = dyn Fn(i32, &str) + Send + Sync;
+
 struct CallbackContext {
-    // Callbacks must be Send + Sync for thread-safe invocation
-    message_callback: Box<dyn Fn(&MessageView) + Send + Sync>,
-    state_callback: Box<dyn Fn(ConnectionState) + Send + Sync>,
+    message_callback: Box<MessageCallback>,
+    state_callback: Box<StateCallback>,
+    error_callback: Box<ErrorCallback>,
+}
+```
+
+### 4. Client interface
+
+
+```rust
+pub struct Client {
+    session: *mut bindings::mqtt_session_t,
+    _context: Arc<Mutex<CallbackContext>>, // Keep the context alive.
 }
 
 impl Client {
-    pub fn new(
-        broker_url: &str,
-        on_message: impl Fn(&MessageView) + Send + Sync + 'static,
-        on_state_change: impl Fn(ConnectionState) + Send + Sync + 'static,
-    ) -> Result<Self, Error> {
-        let callbacks = Arc::new(Mutex::new(CallbackContext {
+    pub fn new<F1, F2, F3>(
+        client_id: &str,
+        on_message: F1,
+        on_state_change: F2,
+        on_error: F3,
+    ) -> Result<Self>
+    where
+        F1: Fn(&MessageView) + Send + Sync + 'static,
+        F2: Fn(ConnectionState) + Send + Sync + 'static,
+        F3: Fn(i32, &str) + Send + Sync + 'static,
+    {
+        let callback_context = Arc::new(Mutex::new(CallbackContext {
             message_callback: Box::new(on_message),
             state_callback: Box::new(on_state_change),
+            error_callback: Box::new(on_error),
         }));
-        
-        // Implementation details...
-        Ok(Client { session, callbacks })
-    }
-}
 
-// C callback bridge
-unsafe extern "C" fn message_callback(
-    message: *const mqtt_message_data_t,
-    context: *mut std::ffi::c_void,
-) {
-    let context = ManuallyDrop::new(
-        Arc::from_raw(context as *const Mutex<CallbackContext>)
-    );
-    
-    if let Ok(guard) = context.lock() {
-        let msg = MessageView::from_raw(message);
-        (guard.message_callback)(&msg);
+  	    // implementation 
+  	    
+        Ok(Self {
+            session,
+            _context: callback_context,
+        })
+    }
+
+    // C callback bridge
+    unsafe extern "C" fn message_callback(
+       message: *const mqtt_message_data_t,
+       context: *mut std::ffi::c_void,
+    ) {
+       // Reconstruct the Arc<Mutex<CallbackContext>> from the raw pointer.
+       // Since Arc::from_raw decreases the strong count when dropped,
+       // we use ManuallyDrop to prevent it from being prematurely deallocated.
+       let context = ManuallyDrop::new(
+          Arc::from_raw(context as *const Mutex<CallbackContext>)
+       );
+
+       if let Ok(guard) = context.lock() {
+           let msg = MessageView::from_raw(message);
+           // Call the user-provided callback with the message view.
+           (guard.message_callback)(&msg);
+       }
+      // No need to drop `context` here; ManuallyDrop ensures it remains alive.
     }
 }
 ```
 
-### 4.Error Handling Strategy
+### 5.Error Handling Strategy
 
 ####  Core Error Types
 The API implements a layered error handling strategy that bridges C++ errors into idiomatic Rust:
@@ -305,7 +336,7 @@ pub fn connect(&mut self) -> Result<()> {
 ```
 
 
-### 5. Thread Safety Guarantees
+### 6. Thread Safety Guarantees
 
 The Client type implements Send and Sync because:
 - The underlying C++ library guarantees thread-safe operations.
