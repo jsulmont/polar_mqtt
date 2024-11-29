@@ -3,9 +3,7 @@ use crate::error::{Error, Result};
 use crate::message::{Message, MessageView};
 use crate::types::{ConnectionState, QoS};
 use std::ffi::{CStr, CString};
-use std::mem::ManuallyDrop;
 use std::sync::Once;
-use std::sync::{Arc, Mutex};
 
 static INIT: Once = Once::new();
 
@@ -21,7 +19,7 @@ struct CallbackContext {
 
 pub struct Client {
     session: *mut bindings::mqtt_session_t,
-    _context: Arc<Mutex<CallbackContext>>, // Keep the context alive.
+    _context: Box<CallbackContext>, // Keep the context alive.
 }
 
 impl Client {
@@ -48,15 +46,18 @@ impl Client {
         });
 
         let client_id = CString::new(client_id)?;
-        let callback_context = Arc::new(Mutex::new(CallbackContext {
+
+        // Create callback context
+        let context = Box::new(CallbackContext {
             message_callback: Box::new(on_message),
             state_callback: Box::new(on_state_change),
             error_callback: Box::new(on_error),
-        }));
+        });
 
-        let context_for_c = Arc::clone(&callback_context);
-        let context_ptr = Arc::into_raw(context_for_c) as *mut std::ffi::c_void;
+        // Convert the Box into a raw pointer for passing to C
+        let context_ptr = Box::into_raw(context) as *mut std::ffi::c_void;
 
+        // Create the MQTT session
         let session = unsafe {
             bindings::mqtt_create_session(
                 client_id.as_ptr(),
@@ -68,13 +69,17 @@ impl Client {
         };
 
         if session.is_null() {
-            unsafe { Arc::from_raw(context_ptr as *const Mutex<CallbackContext>) };
+            unsafe {
+                drop(Box::from_raw(context_ptr as *mut CallbackContext));
+            }
             return Err(Error::InitializationError);
         }
 
+        let context = unsafe { Box::from_raw(context_ptr as *mut CallbackContext) };
+
         Ok(Self {
             session,
-            _context: callback_context,
+            _context: context, // Keep the context alive
         })
     }
 
@@ -152,8 +157,7 @@ impl Client {
             return;
         }
 
-        // Create a temporary reference without taking ownership
-        let context = ManuallyDrop::new(Arc::from_raw(context as *const Mutex<CallbackContext>));
+        let context = &*(context as *const CallbackContext);
 
         let payload = if (*message).payload.is_null() || (*message).payload_length == 0 {
             &[]
@@ -183,23 +187,19 @@ impl Client {
             retained: (*message).retained != 0,
         };
 
-        if let Ok(guard) = context.lock() {
-            (guard.message_callback)(&msg);
-        };
+        (context.message_callback)(&msg);
     }
 
     unsafe extern "C" fn state_callback(
         state: bindings::mqtt_session_state_t,
         context: *mut std::ffi::c_void,
     ) {
-        if !context.is_null() {
-            let context =
-                ManuallyDrop::new(Arc::from_raw(context as *const Mutex<CallbackContext>));
-
-            if let Ok(guard) = context.lock() {
-                (guard.state_callback)(state.into());
-            };
+        if context.is_null() {
+            return;
         }
+
+        let context = &*(context as *const CallbackContext);
+        (context.state_callback)(state.into());
     }
 
     unsafe extern "C" fn error_callback(
@@ -207,17 +207,16 @@ impl Client {
         message: *const std::os::raw::c_char,
         context: *mut std::ffi::c_void,
     ) {
-        if !message.is_null() && !context.is_null() {
-            let context =
-                ManuallyDrop::new(Arc::from_raw(context as *const Mutex<CallbackContext>));
-            let error_msg = CStr::from_ptr(message)
-                .to_str()
-                .unwrap_or("Invalid error message");
-
-            if let Ok(guard) = context.lock() {
-                (guard.error_callback)(error_code, error_msg);
-            };
+        if message.is_null() || context.is_null() {
+            return;
         }
+
+        let context = &*(context as *const CallbackContext);
+        let error_msg = CStr::from_ptr(message)
+            .to_str()
+            .unwrap_or("Invalid error message");
+
+        (context.error_callback)(error_code, error_msg);
     }
 }
 
@@ -237,6 +236,7 @@ unsafe impl Sync for Client {}
 mod tests {
     use super::*;
     use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
