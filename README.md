@@ -11,7 +11,7 @@ Before building this project, ensure you have the following dependencies install
 - Rust toolchain (stable)
 - CMake (3.1 or higher)
 - C++ compiler with C++17 (or above) support
-- Eclipse Paho MQTT C++ Client Library
+- Eclipse [Paho MQTT C](https://github.com/eclipse-paho/paho.mqtt.c) Client Library
 
 ### macOS (via Homebrew)
 ```bash
@@ -19,11 +19,16 @@ brew install cmake
 brew install paho-mqtt
 ```
 
-### Linux (Debian/Ubuntu)
+### Linux Debian/Ubuntu
 ```bash
 sudo apt update
 sudo apt install build-essential cmake libssl-dev
 sudo apt install libpaho-mqtt-dev
+```
+
+### Linux Arch Linux (requires AUR/yay)
+```bash
+sudo yay -S paho-mqtt-c-git
 ```
 
 For other Linux distributions, please use the appropriate package manager.
