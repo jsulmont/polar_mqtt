@@ -2,8 +2,19 @@
 
 Code to support this blog post (see [here](intro.md) for a quick introduction).
 
+## Option 1: Development with VS Code
 
-## Prerequisites
+This repository includes a development container configuration for VS Code. To use it:
+
+1. Install [VS Code](https://code.visualstudio.com/)
+2. Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+3. Clone this repository
+4. Open the repository folder in VS Code
+5. When prompted, click "Reopen in Container" (or press F1, type "Dev Containers: Reopen in Container" and press Enter)
+
+This will provide you with a development environment including all necessary tools for building and testing the project.
+
+## Option 2: Running locally
 
 Before building this project, ensure you have the following dependencies installed:
 
